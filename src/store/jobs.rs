@@ -521,6 +521,11 @@ pub(crate) fn claim_jobs(
             "claim worker id cannot be empty".into(),
         )));
     }
+    if request.partition_key.as_deref() == Some("") {
+        return Err(ClaimError::Validation(ValidationError(
+            "claim partition_key cannot be empty".into(),
+        )));
+    }
     if request.lease_ms <= 0 {
         return Err(ClaimError::Validation(ValidationError(
             "claim lease_ms must be positive".into(),
@@ -709,6 +714,17 @@ fn plan_leases(
     if request.limit == 0 {
         return Ok((Vec::new(), None));
     }
+    if let Some(partition) = &request.partition_key {
+        let mut leases = Vec::new();
+        if let Some(job) = ready_head(tx, request, partition)? {
+            leases.push(ProposedLease {
+                job,
+                lease_token: Id::new()?,
+            });
+        }
+        // Targeted claims never advance the round-robin cursor.
+        return Ok((leases, None));
+    }
     let cursor: Option<String> = tx
         .query_row(
             "SELECT last_partition_key FROM queue_cursors WHERE queue = ?1",
@@ -739,31 +755,9 @@ fn plan_leases(
         if leases.len() >= request.limit {
             break;
         }
-        let head = tx
-            .query_row(
-                &format!(
-                    "SELECT {JOB_COLUMNS} FROM jobs WHERE queue = ?1 AND partition_key = ?2 \
-                     AND state IN ({}) ORDER BY enqueue_sequence LIMIT 1",
-                    ACTIVE_STATES_SQL.as_str(),
-                ),
-                rusqlite::params![request.queue, partition],
-                row_to_job,
-            )
-            .optional()
-            .map_err(StorageError::from_sqlite)?
-            .transpose()?;
-        let Some(job) = head else { continue };
-        let ready = match job.state {
-            JobState::Pending => job.not_before_ms <= request.now_ms,
-            JobState::RetryWait => {
-                job.not_before_ms <= request.now_ms
-                    && job.retry_after_ms.unwrap_or(i64::MIN) <= request.now_ms
-            }
-            _ => false,
-        };
-        if !ready {
+        let Some(job) = ready_head(tx, request, partition)? else {
             continue;
-        }
+        };
         last_leased = Some(partition.clone());
         leases.push(ProposedLease {
             job,
@@ -771,6 +765,37 @@ fn plan_leases(
         });
     }
     Ok((leases, last_leased))
+}
+
+/// The partition's head job, if it exists and is ready to lease now.
+fn ready_head(
+    tx: &Transaction<'_>,
+    request: &ClaimRequest,
+    partition: &str,
+) -> Result<Option<JobRow>, Error> {
+    let head = tx
+        .query_row(
+            &format!(
+                "SELECT {JOB_COLUMNS} FROM jobs WHERE queue = ?1 AND partition_key = ?2 \
+                 AND state IN ({}) ORDER BY enqueue_sequence LIMIT 1",
+                ACTIVE_STATES_SQL.as_str(),
+            ),
+            rusqlite::params![request.queue, partition],
+            row_to_job,
+        )
+        .optional()
+        .map_err(StorageError::from_sqlite)?
+        .transpose()?;
+    let Some(job) = head else { return Ok(None) };
+    let ready = match job.state {
+        JobState::Pending => job.not_before_ms <= request.now_ms,
+        JobState::RetryWait => {
+            job.not_before_ms <= request.now_ms
+                && job.retry_after_ms.unwrap_or(i64::MIN) <= request.now_ms
+        }
+        _ => false,
+    };
+    Ok(if ready { Some(job) } else { None })
 }
 
 fn insert_claim_transaction(
