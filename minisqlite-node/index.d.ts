@@ -68,6 +68,8 @@ export interface ClaimRequestInput {
   nowMs: number
   leaseMs: number
   limit: number
+  /** When set, only this partition's ready head job is eligible for claiming. */
+  partitionKey?: string
 }
 export interface ClaimedJobOutput {
   jobId: string
