@@ -199,6 +199,8 @@ pub struct ClaimRequestInput {
     pub now_ms: i64,
     pub lease_ms: i64,
     pub limit: u32,
+    /// When set, only this partition's ready head job is eligible for claiming.
+    pub partition_key: Option<String>,
 }
 
 #[napi(object)]
@@ -489,6 +491,7 @@ impl Store {
                 now_ms: request.now_ms,
                 lease_ms: request.lease_ms,
                 limit: request.limit as usize,
+                partition_key: request.partition_key,
             })
             .map_err(map_claim_error)?;
         Ok(match outcome {
