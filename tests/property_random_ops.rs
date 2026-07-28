@@ -178,6 +178,7 @@ fn random_claim(store: &ControlPlaneStore, model: &mut Model, rng: &mut Prng) {
             now_ms: model.now_ms,
             lease_ms: LEASE_MS,
             limit: 1 + rng.below(4) as usize,
+            partition_key: None,
         })
         .unwrap();
     match outcome {
@@ -397,6 +398,7 @@ fn run_fuzz_ops(seed: u64, steps: u64) {
                     now_ms: now,
                     lease_ms: 1 + rng.below(256) as i64,
                     limit: 1 + rng.below(4) as usize,
+                    partition_key: None,
                 }) {
                     for job in claims.into_jobs() {
                         leases.push((job.job_id, job.lease_token));

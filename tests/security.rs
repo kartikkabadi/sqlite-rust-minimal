@@ -38,6 +38,7 @@ fn default_export_contains_no_secrets() {
             now_ms: NOW,
             lease_ms: 60_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap()
     {

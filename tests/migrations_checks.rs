@@ -69,6 +69,7 @@ fn valid_lifecycle_passes_check_constraints() {
             now_ms: 2_000,
             lease_ms: 60_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap();
     let claims = match outcome {

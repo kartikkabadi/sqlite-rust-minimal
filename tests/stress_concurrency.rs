@@ -176,6 +176,7 @@ fn concurrent_workers_never_double_lease_a_job() {
                             now_ms: 2_000,
                             lease_ms: 60_000,
                             limit: 5,
+                            partition_key: None,
                         })
                         .unwrap();
                     match outcome {

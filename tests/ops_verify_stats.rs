@@ -81,6 +81,7 @@ fn verify_reports_leased_jobs_missing_lease_fields_and_orphaned_receipts() {
             now_ms: 2_000,
             lease_ms: 60_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap();
     drop(store);
@@ -116,6 +117,7 @@ fn verify_reports_leased_jobs_missing_lease_fields_and_orphaned_receipts() {
             now_ms: 2_000,
             lease_ms: 60_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap();
     drop(store2);
@@ -148,6 +150,7 @@ fn diagnostic_export_redacts_error_summary_by_default() {
             now_ms: 2_000,
             lease_ms: 60_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap();
     let claims = match outcome {
@@ -205,6 +208,7 @@ fn stats_report_oldest_uncertain_job() {
         now_ms,
         lease_ms: 60_000,
         limit: 1,
+        partition_key: None,
     };
     store.claim_jobs(&request(2_000)).unwrap();
     // Expiry maintenance moves the reconcilable job to Uncertain at 70_000.

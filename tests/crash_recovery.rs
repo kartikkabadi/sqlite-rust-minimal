@@ -243,6 +243,7 @@ fn child_abort_after_claim() {
             now_ms: 2_000,
             lease_ms: 600_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap();
     let ClaimOutcome::Committed(claims) = outcome else {
@@ -329,6 +330,7 @@ fn child_crash_claim_worker() {
                 now_ms: 2_000,
                 lease_ms: 600_000,
                 limit: 3,
+                partition_key: None,
             })
             .unwrap();
         if let ClaimOutcome::Committed(claims) = outcome {

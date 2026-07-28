@@ -25,6 +25,7 @@ fn claim_request(queue: &str, now_ms: i64) -> ClaimRequest {
         now_ms,
         lease_ms: LEASE_MS,
         limit: 16,
+        partition_key: None,
     }
 }
 

@@ -30,6 +30,7 @@ fn claim_one(store: &ControlPlaneStore, queue: &str, now_ms: i64) -> minisqlite:
             now_ms,
             lease_ms: 10_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap()
     {
@@ -124,6 +125,7 @@ fn fail_with_attempts_remaining_moves_to_retry_wait() {
                 now_ms: 4_000,
                 lease_ms: 10_000,
                 limit: 1,
+                partition_key: None,
             })
             .unwrap(),
         ClaimOutcome::Noop
@@ -196,6 +198,7 @@ fn claim_with_lease_expiry_overflow_is_rejected() {
             now_ms: i64::MAX,
             lease_ms: 10_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap_err();
     assert!(matches!(err, minisqlite::ClaimError::Validation(_)));
@@ -270,6 +273,7 @@ fn make_uncertain(store: &ControlPlaneStore, id: Id) {
             now_ms: 20_000,
             lease_ms: 10_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap();
     assert!(matches!(outcome, ClaimOutcome::MaintenanceCommitted(_)));

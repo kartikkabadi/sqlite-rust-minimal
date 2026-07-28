@@ -216,6 +216,7 @@ impl Harness {
             now_ms: self.now_ms,
             lease_ms: LEASE_MS,
             limit: 1 + self.rng.below(4) as usize,
+            partition_key: None,
         };
         let ready = self.model.jobs_in(ModelJobState::Ready);
         match self.store().claim_jobs(&request).unwrap() {

@@ -86,6 +86,7 @@ fn indeterminate_claim_poisons_writer_and_recovery_returns_original_tokens() {
             now_ms: NOW,
             lease_ms: 60_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap_err();
     let ClaimError::Indeterminate(info) = err else {
@@ -137,6 +138,7 @@ fn indeterminate_lease_extension_poisons_writer_and_job_read_verifies() {
             now_ms: NOW,
             lease_ms: 60_000,
             limit: 1,
+            partition_key: None,
         })
         .unwrap()
     {
