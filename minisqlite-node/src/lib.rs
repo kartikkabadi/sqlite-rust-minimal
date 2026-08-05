@@ -165,6 +165,38 @@ pub struct JobAckInput {
 }
 
 #[napi(object)]
+pub struct JobFailureInput {
+    pub job_id: String,
+    pub lease_token: String,
+    pub error_summary: Option<String>,
+    /// Delay before the job becomes claimable again; store default when omitted.
+    pub retry_after_ms: Option<i64>,
+}
+
+#[napi(object)]
+pub struct JobCancellationInput {
+    pub job_id: String,
+    /// Required to cancel a leased job; omit for unleased jobs.
+    pub lease_token: Option<String>,
+}
+
+#[napi(object)]
+pub struct JobResolutionInput {
+    pub job_id: String,
+    /// "retry", "markSucceeded", or "markDead".
+    pub resolution: String,
+}
+
+fn parse_resolution(resolution: &str) -> Result<ms::Resolution, ErrorCode> {
+    Ok(match resolution {
+        "retry" => ms::Resolution::Retry,
+        "markSucceeded" => ms::Resolution::MarkSucceeded,
+        "markDead" => ms::Resolution::MarkDead,
+        other => return Err(err("Validation", format!("unknown resolution {other:?}"))),
+    })
+}
+
+#[napi(object)]
 pub struct CommitBatchInput {
     /// 32-char hex; generated when omitted. Supply one to be able to recover
     /// an indeterminate commit with `recoverTransaction`.
@@ -175,6 +207,9 @@ pub struct CommitBatchInput {
     pub projection_patches: Option<Vec<ProjectionPatchInput>>,
     pub enqueue_jobs: Option<Vec<JobSpecInput>>,
     pub ack_jobs: Option<Vec<JobAckInput>>,
+    pub fail_jobs: Option<Vec<JobFailureInput>>,
+    pub cancel_jobs: Option<Vec<JobCancellationInput>>,
+    pub resolve_uncertain_jobs: Option<Vec<JobResolutionInput>>,
 }
 
 #[napi(object)]
@@ -337,6 +372,13 @@ fn job_info_output(info: ms::JobInfo) -> JobInfoOutput {
     }
 }
 
+/// One page from `jobsPage`; pass `nextAfterSequence` back to fetch the next page.
+#[napi(object)]
+pub struct JobsPageOutput {
+    pub jobs: Vec<JobInfoOutput>,
+    pub next_after_sequence: i64,
+}
+
 #[napi(object)]
 pub struct PersistedEventOutput {
     pub transaction_id: String,
@@ -430,6 +472,28 @@ fn build_batch(input: CommitBatchInput) -> Result<ms::CommitBatch, ErrorCode> {
             parse_id("jobId", &ack.job_id)?,
             parse_id("leaseToken", &ack.lease_token)?,
             ack.result_digest.map(|d| d.to_vec()),
+        );
+    }
+    for failure in input.fail_jobs.unwrap_or_default() {
+        batch = batch.fail_job(
+            parse_id("jobId", &failure.job_id)?,
+            parse_id("leaseToken", &failure.lease_token)?,
+            failure.error_summary.unwrap_or_default(),
+            failure.retry_after_ms,
+        );
+    }
+    for cancellation in input.cancel_jobs.unwrap_or_default() {
+        let lease_token = cancellation
+            .lease_token
+            .as_deref()
+            .map(|hex| parse_id("leaseToken", hex))
+            .transpose()?;
+        batch = batch.cancel_job(parse_id("jobId", &cancellation.job_id)?, lease_token);
+    }
+    for resolution in input.resolve_uncertain_jobs.unwrap_or_default() {
+        batch = batch.resolve_uncertain_job(
+            parse_id("jobId", &resolution.job_id)?,
+            parse_resolution(&resolution.resolution)?,
         );
     }
     Ok(batch)
@@ -581,6 +645,43 @@ impl Store {
             .jobs(queue.as_deref(), state, limit as usize)
             .map_err(map_error)?;
         Ok(infos.into_iter().map(job_info_output).collect())
+    }
+
+    /// Look up one job by its ID.
+    #[napi]
+    pub fn job(&self, job_id: String) -> Result<Option<JobInfoOutput>, ErrorCode> {
+        let info = self
+            .store()?
+            .job(parse_id("jobId", &job_id)?)
+            .map_err(map_error)?;
+        Ok(info.map(job_info_output))
+    }
+
+    /// List one page of jobs after a pagination cursor (an enqueue-sequence
+    /// value; start from 0), optionally filtered by queue and state. Returns
+    /// the page and the cursor to pass for the next page.
+    #[napi]
+    pub fn jobs_page(
+        &self,
+        queue: Option<String>,
+        state: Option<String>,
+        after_sequence: i64,
+        limit: u32,
+    ) -> Result<JobsPageOutput, ErrorCode> {
+        let state = state.as_deref().map(parse_job_state).transpose()?;
+        let (infos, next_after_sequence) = self
+            .store()?
+            .jobs_page(
+                queue.as_deref(),
+                state,
+                after_sequence as u64,
+                limit as usize,
+            )
+            .map_err(map_error)?;
+        Ok(JobsPageOutput {
+            jobs: infos.into_iter().map(job_info_output).collect(),
+            next_after_sequence: next_after_sequence as i64,
+        })
     }
 
     /// Get one projection entry by key.

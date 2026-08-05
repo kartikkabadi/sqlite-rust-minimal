@@ -44,6 +44,23 @@ export interface JobAckInput {
   leaseToken: string
   resultDigest?: Buffer
 }
+export interface JobFailureInput {
+  jobId: string
+  leaseToken: string
+  errorSummary?: string
+  /** Delay before the job becomes claimable again; store default when omitted. */
+  retryAfterMs?: number
+}
+export interface JobCancellationInput {
+  jobId: string
+  /** Required to cancel a leased job; omit for unleased jobs. */
+  leaseToken?: string
+}
+export interface JobResolutionInput {
+  jobId: string
+  /** "retry", "markSucceeded", or "markDead". */
+  resolution: string
+}
 export interface CommitBatchInput {
   /**
    * 32-char hex; generated when omitted. Supply one to be able to recover
@@ -56,6 +73,9 @@ export interface CommitBatchInput {
   projectionPatches?: Array<ProjectionPatchInput>
   enqueueJobs?: Array<JobSpecInput>
   ackJobs?: Array<JobAckInput>
+  failJobs?: Array<JobFailureInput>
+  cancelJobs?: Array<JobCancellationInput>
+  resolveUncertainJobs?: Array<JobResolutionInput>
 }
 export interface CommitReceiptOutput {
   transactionId: string
@@ -116,6 +136,11 @@ export interface JobInfoOutput {
   workerId?: string
   errorSummary?: string
 }
+/** One page from `jobsPage`; pass `nextAfterSequence` back to fetch the next page. */
+export interface JobsPageOutput {
+  jobs: Array<JobInfoOutput>
+  nextAfterSequence: number
+}
 export interface PersistedEventOutput {
   transactionId: string
   globalSequence: number
@@ -147,6 +172,14 @@ export declare class Store {
   recoverTransaction(transactionId: string): TransactionRecoveryOutput
   /** List jobs, optionally filtered by queue and state, in enqueue order. */
   jobs(queue: string | undefined | null, state: string | undefined | null, limit: number): Array<JobInfoOutput>
+  /** Look up one job by its ID. */
+  job(jobId: string): JobInfoOutput | null
+  /**
+   * List one page of jobs after a pagination cursor (an enqueue-sequence
+   * value; start from 0), optionally filtered by queue and state. Returns
+   * the page and the cursor to pass for the next page.
+   */
+  jobsPage(queue: string | undefined | null, state: string | undefined | null, afterSequence: number, limit: number): JobsPageOutput
   /** Get one projection entry by key. */
   projectionGet(projection: string, key: Buffer): Buffer | null
   /** The current version of a projection (0 when it does not exist). */
