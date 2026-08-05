@@ -180,6 +180,7 @@ fn claim_one(
             now_ms: now_ms(),
             lease_ms: 30_000,
             limit: 1,
+            partition_key: None,
         }) {
             Ok(ClaimOutcome::Committed(claims)) => {
                 let tx = claims.transaction_id();

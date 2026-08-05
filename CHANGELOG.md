@@ -30,6 +30,9 @@ from-scratch SQL engine.
   (`doctor`, `verify`, `stats`, `events tail`, `projections list`,
   `jobs list`, `backup`, `diagnostic-export`, `migrations status`)
 - Backend-independent contract test suite
+- Optional `partition_key` filter on `ClaimRequest` (and `partitionKey` on the
+  Node binding's `ClaimRequestInput`) to claim only one partition's ready head
+  job; maintenance stays queue-wide and the round-robin cursor is unaffected
 
 ### Breaking changes
 

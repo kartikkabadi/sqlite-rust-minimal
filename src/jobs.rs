@@ -296,6 +296,12 @@ pub struct ClaimRequest {
     pub lease_ms: i64,
     /// Maximum number of jobs to claim.
     pub limit: usize,
+    /// When set, only jobs in this partition are eligible: the claim leases at
+    /// most that partition's ready head job. `None` claims round-robin across
+    /// all partitions. Expired-lease maintenance always stays queue-wide, and a
+    /// partition-scoped claim never advances the round-robin cursor, so
+    /// targeted claims cannot skew fairness or starve lease repair elsewhere.
+    pub partition_key: Option<String>,
 }
 
 /// Receipt for a claim transaction that performed only expired-lease maintenance.

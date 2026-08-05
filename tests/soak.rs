@@ -93,6 +93,7 @@ fn soak_enqueue_claim_ack_with_crashes_and_backups() {
                         now_ms: now,
                         lease_ms: 200,
                         limit: 4,
+                        partition_key: None,
                     });
                     let claims = match outcome {
                         Ok(ClaimOutcome::Committed(claims)) => claims.into_jobs(),

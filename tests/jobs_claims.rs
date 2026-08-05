@@ -36,6 +36,7 @@ fn request(now_ms: i64, limit: usize) -> ClaimRequest {
         now_ms,
         lease_ms: 10_000,
         limit,
+        partition_key: None,
     }
 }
 
@@ -336,6 +337,7 @@ fn claim_request_validation() {
             now_ms: 0,
             lease_ms: 1,
             limit: 1,
+            partition_key: None,
         },
         ClaimRequest {
             queue: "q".into(),
@@ -343,6 +345,7 @@ fn claim_request_validation() {
             now_ms: 0,
             lease_ms: 1,
             limit: 1,
+            partition_key: None,
         },
         ClaimRequest {
             queue: "q".into(),
@@ -350,6 +353,7 @@ fn claim_request_validation() {
             now_ms: 0,
             lease_ms: 0,
             limit: 1,
+            partition_key: None,
         },
     ] {
         assert!(matches!(
@@ -403,6 +407,102 @@ fn lease_at_exact_expiry_is_current_everywhere() {
     let outcome = store.claim_jobs(&request(expiry + 1_000 + 1, 0)).unwrap();
     assert!(matches!(outcome, ClaimOutcome::MaintenanceCommitted(_)));
     assert_eq!(store.job(id).unwrap().unwrap().state, JobState::Uncertain);
+}
+
+fn partition_request(now_ms: i64, limit: usize, partition: &str) -> ClaimRequest {
+    ClaimRequest {
+        partition_key: Some(partition.into()),
+        ..request(now_ms, limit)
+    }
+}
+
+#[test]
+fn partition_filter_claims_only_that_partitions_head() {
+    let (_dir, store) = store();
+    for (id, partition) in [(1, "a"), (2, "b"), (3, "c"), (4, "b")] {
+        enqueue(&store, id, partition);
+    }
+    let jobs = match store
+        .claim_jobs(&partition_request(2_000, 10, "b"))
+        .unwrap()
+    {
+        ClaimOutcome::Committed(claims) => claims.into_jobs(),
+        other => panic!("expected committed claims, got {other:?}"),
+    };
+    // Only partition b's head is leased, even with a large limit.
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].job_id, Id::from(2u128));
+    assert_eq!(jobs[0].partition_key, "b");
+    // Other partitions are untouched: still Pending with zero attempts.
+    for id in [1u128, 3, 4] {
+        let info = store.job(Id::from(id)).unwrap().unwrap();
+        assert_eq!(info.state, JobState::Pending);
+        assert_eq!(info.attempt, 0);
+    }
+}
+
+#[test]
+fn partition_filter_misses_are_noop() {
+    let (_dir, store) = store();
+    enqueue(&store, 1, "a");
+    // Unknown partition, and a partition whose head is already leased.
+    assert_eq!(
+        store
+            .claim_jobs(&partition_request(2_000, 1, "zz"))
+            .unwrap(),
+        ClaimOutcome::Noop
+    );
+    claim(&store, 2_000, 1);
+    assert_eq!(
+        store.claim_jobs(&partition_request(3_000, 1, "a")).unwrap(),
+        ClaimOutcome::Noop
+    );
+}
+
+#[test]
+fn partition_filter_does_not_advance_round_robin_cursor() {
+    let (_dir, store) = store();
+    for (id, partition) in [(1, "a"), (2, "b"), (3, "c")] {
+        enqueue(&store, id, partition);
+    }
+    let targeted = match store.claim_jobs(&partition_request(2_000, 1, "b")).unwrap() {
+        ClaimOutcome::Committed(claims) => claims.into_jobs(),
+        other => panic!("expected committed claims, got {other:?}"),
+    };
+    assert_eq!(targeted[0].partition_key, "b");
+    // The next queue-wide claim still starts from partition a.
+    assert_eq!(claim(&store, 3_000, 1)[0].partition_key, "a");
+}
+
+#[test]
+fn partition_filter_still_runs_queue_wide_maintenance() {
+    let (_dir, store) = store();
+    enqueue(&store, 1, "a");
+    enqueue(&store, 2, "b");
+    claim(&store, 2_000, 10); // lease both
+                              // A targeted claim of an empty partition after expiry still repairs both
+                              // expired leases queue-wide.
+    let outcome = store
+        .claim_jobs(&partition_request(20_000, 1, "zz"))
+        .unwrap();
+    assert!(matches!(outcome, ClaimOutcome::MaintenanceCommitted(_)));
+    for id in [1u128, 2] {
+        assert_eq!(
+            store.job(Id::from(id)).unwrap().unwrap().state,
+            JobState::Uncertain
+        );
+    }
+}
+
+#[test]
+fn empty_partition_filter_is_rejected() {
+    let (_dir, store) = store();
+    assert!(matches!(
+        store
+            .claim_jobs(&partition_request(2_000, 1, ""))
+            .unwrap_err(),
+        minisqlite::ClaimError::Validation(_)
+    ));
 }
 
 #[test]

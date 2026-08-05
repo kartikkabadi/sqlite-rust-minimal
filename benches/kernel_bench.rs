@@ -753,6 +753,7 @@ fn rss_child_main(workload: &str) {
                     now_ms: clock.tick(),
                     lease_ms: 1,
                     limit: 1000,
+                    partition_key: None,
                 };
                 let jobs = claimed_jobs(store.claim_jobs(&request).expect("child T8 claim"));
                 if jobs.is_empty() {
@@ -769,6 +770,7 @@ fn rss_child_main(workload: &str) {
                     now_ms: clock.tick(),
                     lease_ms: 1,
                     limit: 0,
+                    partition_key: None,
                 };
                 store.claim_jobs(&request).expect("child T8 maintenance");
             }
@@ -898,6 +900,7 @@ fn claim(store: &ControlPlaneStore, queue: &str, now_ms: i64, limit: usize) -> V
         now_ms,
         lease_ms: 3_600_000,
         limit,
+        partition_key: None,
     };
     claimed_jobs(store.claim_jobs(&request).expect("claim jobs"))
 }
@@ -1193,6 +1196,7 @@ fn lifecycle_workloads(root: &Path, profile: &Profile, durability: Durability, l
                 now_ms: clock.tick(),
                 lease_ms: 1,
                 limit: 1000,
+                partition_key: None,
             };
             let jobs = claimed_jobs(setup.claim_jobs(&request).expect("T8 claim"));
             if jobs.is_empty() && short_leased.len() >= total {
@@ -1209,6 +1213,7 @@ fn lifecycle_workloads(root: &Path, profile: &Profile, durability: Durability, l
                 now_ms: clock.tick(),
                 lease_ms: 1,
                 limit: 0,
+                partition_key: None,
             };
             setup.claim_jobs(&request).expect("T8 maintenance");
             let n = uncertain.len();

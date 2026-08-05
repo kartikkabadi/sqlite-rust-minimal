@@ -313,6 +313,7 @@ fn jobs_show_uncertain_and_resolve_roundtrip() {
                 now_ms: 2_000,
                 lease_ms: 1_000,
                 limit: 1,
+                partition_key: None,
             })
             .unwrap();
         // Expire the lease so maintenance marks the job uncertain.
@@ -323,6 +324,7 @@ fn jobs_show_uncertain_and_resolve_roundtrip() {
                 now_ms: 10_000,
                 lease_ms: 1_000,
                 limit: 1,
+                partition_key: None,
             })
             .unwrap()
         {}

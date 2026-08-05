@@ -35,6 +35,7 @@ fn claim_one(store: &ControlPlaneStore, now_ms: i64, lease_ms: i64) -> ClaimedJo
                 now_ms,
                 lease_ms,
                 limit: 1,
+                partition_key: None,
             })
             .unwrap()
         {
@@ -94,6 +95,7 @@ fn ack_races_lease_expiry_maintenance() {
                     now_ms: after_expiry,
                     lease_ms: 1_000,
                     limit: 1,
+                    partition_key: None,
                 });
             })
         };
@@ -145,6 +147,7 @@ fn heartbeat_races_lease_expiry_maintenance() {
                     now_ms: expiry + 1,
                     lease_ms: 1_000,
                     limit: 1,
+                    partition_key: None,
                 });
             })
         };
@@ -242,6 +245,7 @@ fn uncertain_resolution_races_claim() {
                 now_ms: after_expiry,
                 lease_ms: 1_000,
                 limit: 1,
+                partition_key: None,
             });
         }
 
@@ -273,6 +277,7 @@ fn uncertain_resolution_races_claim() {
                         now_ms: after_expiry,
                         lease_ms: 60_000,
                         limit: 1,
+                        partition_key: None,
                     }) {
                         leased += claims.into_jobs().len();
                     }
